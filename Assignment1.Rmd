@@ -1,0 +1,183 @@
+Assignment 1
+============
+
+## 1. Purpose
+
+The purpose of the assignment is to analyse the activity of an individual monitored through a device over a two-month period. The following questions will be asnwered:
+
+(1) What is mean total number of steps taken per day?
+(2) What is the average daily activity pattern?
+(3) Are there differences in activity patterns between weekdays and weekends?
+
+## 2. Analysis
+
+Let's load and take a look at the data set.
+
+```{r echo = TRUE}
+
+activityData <- read.csv("D:/Data science specialisation/8. Reproducible research/activity.csv")
+summary(activityData)
+
+```
+
+Note that the steps data has some gaps (indicated by NAs). We will come back to that later. For now, we will ignore those when calculating statistics.
+
+###(1) What is mean total number of steps taken per day?
+
+We now calculate the total number pf steps,and mean and median number of steps per day.
+
+```{r echo = TRUE, results='hide'}
+library(dplyr)
+
+timeIntervalOrder <- numeric()
+
+#label each time interval in terms of its order within a single day
+#this will be used to asnwer question 2
+for (i in 1:nrow(activityData)) {
+        
+        timeIntervalOrder[i] <- sum(activityData$date[1:i] == activityData$date[i])
+        
+        
+}
+
+activityData <- cbind(activityData,timeIntervalOrder)
+        
+activityDataClean <- activityData[complete.cases(activityData),]
+
+byDate <- activityDataClean %>% group_by(date) %>% summarise(totalSteps = sum(steps))
+                                                             
+
+
+totalSteps <- sum(byDate$totalSteps)
+
+meanDailySteps <- mean(byDate$totalSteps)
+
+medianDailySteps <- median(byDate$totalSteps)
+```
+
+The total number of steps made over the two-month period is `r format(totalSteps, nsmall = 0)`. The average number of steps a day is `r format(meanDailySteps,nsmall = 0)` while the median is `r format(medianDailySteps, nsmall = 0 )`.
+
+Here is how daily steps are distributed.
+
+```{r echo = TRUE}
+library(ggvis)
+
+g <- byDate %>% ggvis(~totalSteps) %>% layer_histograms()
+g
+
+```
+
+As mentioned before, there are a number of missing values in the data set. In the following seciton, we fill-in those missing values using the average number of steps per interval and see how the statistics we calculated so far will change.
+
+```{r echo = TRUE, results='hide'}
+
+activityDataImputed <- activityData
+
+for (i in 1:nrow(activityData)) {
+ 
+        if (is.na(activityDataImputed$steps[i])) {
+                
+                activityDataImputed$steps[i] <- mean(activityData$steps, na.rm = TRUE)
+        }
+               
+}
+
+byDateImputed <- activityDataImputed %>% group_by(date) %>% summarise(totalSteps = sum(steps))
+
+
+totalStepsImputed <- sum(byDateImputed$totalSteps)
+
+meanDailyStepsImputed <- mean(byDateImputed$totalSteps)
+
+medianDailyStepsImputed <- median(byDateImputed$totalSteps)
+
+
+```
+
+The total number of steps made over the two-month period is `r format(totalStepsImputed, nsmall = 0)` - a `r format(totalStepsImputed/totalSteps*100 - 100, nsmall = 0)`% change compared to previos result when we ignored the missing values. The average number of steps a day is `r format(meanDailyStepsImputed,nsmall = 0)` while the median is `r format(medianDailyStepsImputed, nsmall = 0 )` - very small change compared to the previous values.
+
+Here is how daily steps are distributed.
+
+```{r echo = TRUE}
+
+g3 <- byDateImputed %>% ggvis(~totalSteps) %>% layer_histograms()
+g3
+
+```
+
+###(2) What is the average daily activity pattern?
+
+Next, we find out which time of the day was when the greatest activity took place.
+
+```{r echo = TRUE, results='hide'}
+
+byInterval <- activityDataClean %>% group_by(timeIntervalOrder) %>% summarise(meanSteps = mean(steps))
+
+g2 <- byInterval %>% ggvis(~timeIntervalOrder,~meanSteps) %>% layer_lines()
+
+maxStepsInInterval <- max(byInterval$meanSteps)
+mostActiveInterval <- grep(maxStepsInInterval,byInterval$meanSteps)
+```
+
+The most active time of the day on average is `r format(mostActiveInterval*5/60, nsmall = 2, digits = 3)` o'clock when there were `r format(maxStepsInInterval, nsmall = 0, digits = 3)` steps were made.
+
+The following graph shows the distribution of the number of steps made on average in which 5-minute time interval.
+
+```{r echo = FALSE}
+g2
+
+```
+
+###(3) Are there differences in activity patterns between weekdays and weekends?
+
+```{r echo = TRUE,results='hide'}
+
+activityDataImputed$date <- as.Date(activityDataImputed$date)
+
+t <- weekdays(activityDataImputed$date, abbreviate = TRUE)
+
+weekTime <- vector()
+
+for (i in 1:nrow(activityDataImputed)) {
+
+        if (t[i] == "Sat" || t[i] == "Sun") {
+        
+          weekTime[i] <- "weekend"
+        } else {
+        
+               weekTime[i] <- "weekday"
+        
+        }
+        
+}
+
+activityDataImputed <- cbind(activityDataImputed, weekTime)
+
+weekEndDays <- activityDataImputed[,"weekTime"] == "weekend"
+
+byIntervalImputedWeekend <- activityDataImputed[weekEndDays,] %>% group_by(timeIntervalOrder) %>% 
+                                                                                summarise(meanSteps = mean(steps))
+
+byIntervalImputedWeekday <- activityDataImputed[!weekEndDays,] %>% group_by(timeIntervalOrder) %>% 
+                                                                                summarise(meanSteps = mean(steps))
+
+
+g4 <- byIntervalImputedWeekend %>% ggvis(~timeIntervalOrder,~meanSteps) %>% layer_lines()
+g5 <- byIntervalImputedWeekday %>% ggvis(~timeIntervalOrder,~meanSteps) %>% layer_lines()
+
+
+
+g5
+```
+
+The following two graphs show the activity levels during weekends and weekdays via plotting average number of steps over 5-minute intervals.
+
+Weekends activity
+```{r echo = FALSE}
+g4
+```
+
+Weekdays activity
+```{r echo = FALSE}
+g5
+```
